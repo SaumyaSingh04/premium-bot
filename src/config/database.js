@@ -7,8 +7,9 @@ mongoose.connection.on('error', (err) => logger.error('MongoDB error', { error: 
 
 export async function connectDB() {
   await mongoose.connect(config.mongodb.uri, {
-    serverSelectionTimeoutMS: 10_000,
-    socketTimeoutMS: 45_000,
+    serverSelectionTimeoutMS: 5_000,
+    socketTimeoutMS: 10_000,
+    connectTimeoutMS: 5_000,
   });
   logger.info('MongoDB connected');
 }

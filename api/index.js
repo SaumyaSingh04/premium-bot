@@ -5,12 +5,9 @@ import config from '../src/config/index.js';
 import { connectDB } from '../src/config/database.js';
 import logger from '../src/logger/index.js';
 
-let initialized = false;
+let initPromise = null;
 
 async function init() {
-  if (initialized) return;
-  initialized = true;
-
   await connectDB();
 
   try {
@@ -44,6 +41,10 @@ async function init() {
 }
 
 export default async function handler(req, res) {
-  await init();
+  if (!initPromise) initPromise = init().catch((err) => {
+    logger.error('Init failed', { error: err.message });
+    initPromise = null; // allow retry on next request
+  });
+  await initPromise;
   return app(req, res);
 }
