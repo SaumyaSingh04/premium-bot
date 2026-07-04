@@ -12,7 +12,6 @@ import logger from './logger/index.js';
 import config from './config/index.js';
 import { connectDB } from './config/database.js';
 import sessionRepository from './repositories/sessionRepository.js';
-import userRepository from './repositories/userRepository.js';
 import bot from './bot/bot.js';
 
 // Connect to MongoDB (required on Vercel since server.js is not run)
@@ -51,32 +50,15 @@ app.get('/health', (req, res) => {
   const dbState = ['disconnected', 'connected', 'connecting', 'disconnecting'];
   const dbStatus = dbState[mongoose.connection.readyState] ?? 'unknown';
 
-  const isDbConnected = mongoose.connection.readyState === 1;
-  let users = sessionRepository.totalUsers();
-  let messages = sessionRepository.globalMessageCount();
-  let tokens = sessionRepository.globalTokenCount();
-
-  if (isDbConnected) {
-    try {
-      const [count, [globalStats]] = await Promise.all([
-        userRepository.totalUsers(),
-        userRepository.globalStats(),
-      ]);
-      users = count;
-      messages = globalStats?.totalMessages ?? 0;
-      tokens = globalStats?.totalTokens ?? 0;
-    } catch (_) { /* fall back to in-memory */ }
-  }
-
   sendSuccess(res, {
     status: 'ok',
     env: config.env,
     uptime: Math.floor(process.uptime()),
     memory: process.memoryUsage().rss,
     db: dbStatus,
-    users,
-    messages,
-    tokens,
+    users: sessionRepository.totalUsers(),
+    messages: sessionRepository.globalMessageCount(),
+    tokens: sessionRepository.globalTokenCount(),
     version: config.bot.version,
   }, 'Healthy');
 });
