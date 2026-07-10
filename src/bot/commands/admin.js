@@ -1,7 +1,7 @@
-import mongoose from 'mongoose';
-import User from '../../models/User.js';
+import userService from '../../modules/user/userService.js';
+import walletService from '../../modules/wallet/walletService.js';
 import sessionRepository from '../../repositories/sessionRepository.js';
-import userRepository from '../../repositories/userRepository.js';
+import pgUserRepository from '../../repositories/pg/pgUserRepository.js';
 import config from '../../config/index.js';
 
 const adminCommand = async (ctx) => {
@@ -14,23 +14,24 @@ const adminCommand = async (ctx) => {
       '/admin stats — global usage stats\n' +
       '/admin broadcast <msg> — send message to all active users\n' +
       '/admin user <id> — lookup user info\n' +
-      '/admin resetcredits <id> — reset user credits\n' +
       '/admin health — system health',
       { parse_mode: 'Markdown' }
     );
   }
 
   if (sub === 'stats') {
-    const [dbStats] = await userRepository.globalStats();
-    const dbState = ['disconnected', 'connected', 'connecting', 'disconnecting'];
+    const stats = await userService.globalStats();
+    const totalMessages = stats._sum?.totalMessages ?? 0;
+    const totalTokens = stats._sum?.totalTokens ?? 0;
+    const totalUsers = await userService.count();
     return ctx.reply(
       `📊 *Global Stats*\n\n` +
+      `• Total users: ${totalUsers}\n` +
       `• Active sessions: ${sessionRepository.totalUsers()}\n` +
       `• Session messages: ${sessionRepository.globalMessageCount()}\n` +
       `• Session tokens: ${sessionRepository.globalTokenCount()}\n` +
-      `• DB messages: ${dbStats?.totalMessages ?? 0}\n` +
-      `• DB tokens: ${dbStats?.totalTokens ?? 0}\n` +
-      `• DB: ${dbState[mongoose.connection.readyState]}\n` +
+      `• DB messages: ${totalMessages}\n` +
+      `• DB tokens: ${totalTokens}\n` +
       `• Uptime: ${Math.floor(process.uptime())}s\n` +
       `• Memory: ${Math.round(process.memoryUsage().rss / 1024 / 1024)}MB`,
       { parse_mode: 'Markdown' }
@@ -53,40 +54,29 @@ const adminCommand = async (ctx) => {
   if (sub === 'user') {
     const targetId = parseInt(args[1], 10);
     if (!targetId) return ctx.reply('Usage: /admin user <telegram_id>');
-    const user = await userRepository.findByTelegramId(targetId);
+    const user = await userService.findByTelegramId(targetId);
     if (!user) return ctx.reply('User not found.');
+    const balance = user.wallet?.balance ?? 0;
     return ctx.reply(
       `👤 *User ${targetId}*\n\n` +
       `• Name: ${user.firstName ?? ''} ${user.lastName ?? ''}\n` +
       `• Username: @${user.username ?? 'none'}\n` +
-      `• Messages: ${user.stats.totalMessages}\n` +
-      `• Tokens: ${user.stats.totalTokens}\n` +
-      `• Credits: ${user.credits.remaining}\n` +
-      `• Joined: ${user.createdAt.toLocaleDateString()}`,
+      `• Messages: ${user.totalMessages}\n` +
+      `• Tokens: ${user.totalTokens}\n` +
+      `• Coin balance: ${balance} 🪙\n` +
+      `• Joined: ${new Date(user.createdAt).toLocaleDateString()}`,
       { parse_mode: 'Markdown' }
     );
-  }
-
-  if (sub === 'resetcredits') {
-    const targetId = parseInt(args[1], 10);
-    if (!targetId) return ctx.reply('Usage: /admin resetcredits <telegram_id>');
-    await userRepository.findByTelegramId(targetId).then((u) => {
-      if (!u) throw new Error('User not found');
-      u.credits.remaining = config.credits.dailyFree;
-      u.credits.lastResetAt = new Date();
-      return u.save();
-    });
-    return ctx.reply(`✅ Credits reset for user ${targetId}`);
   }
 
   if (sub === 'broadcast') {
     const message = args.slice(1).join(' ');
     if (!message) return ctx.reply('Usage: /admin broadcast <message>');
-    const users = await User.find({}, 'telegramId').lean();
+    const users = await pgUserRepository.findAllTelegramIds();
     let sent = 0, failed = 0;
-    for (const u of users) {
+    for (const telegramId of users) {
       try {
-        await ctx.telegram.sendMessage(u.telegramId, `📢 ${message}`);
+        await ctx.telegram.sendMessage(telegramId.toString(), `📢 ${message}`);
         sent++;
       } catch {
         failed++;

@@ -1,13 +1,10 @@
 import User from '../models/User.js';
 import config from '../config/index.js';
 
-const isNewDay = (date) => {
-  const now = new Date();
-  return (
-    now.getUTCFullYear() !== date.getUTCFullYear() ||
-    now.getUTCMonth() !== date.getUTCMonth() ||
-    now.getUTCDate() !== date.getUTCDate()
-  );
+const startOfTodayUTC = () => {
+  const d = new Date();
+  d.setUTCHours(0, 0, 0, 0);
+  return d;
 };
 
 class CreditsRepository {
@@ -15,7 +12,8 @@ class CreditsRepository {
     const user = await User.findOne({ telegramId }, 'credits');
     if (!user) return config.credits.dailyFree;
 
-    if (isNewDay(user.credits.lastResetAt)) {
+    const today = startOfTodayUTC();
+    if (user.credits.lastResetAt < today) {
       const updated = await User.findOneAndUpdate(
         { telegramId },
         { $set: { 'credits.remaining': config.credits.dailyFree, 'credits.lastResetAt': new Date() } },
@@ -29,25 +27,56 @@ class CreditsRepository {
 
   /**
    * Atomically resets credits if a new day has started, then deducts.
+   * Single round-trip using an aggregation pipeline update — eliminates TOCTOU.
    * Returns true if deduction succeeded, false if insufficient credits.
    */
   async deduct(telegramId, amount = 1) {
-    // First check if daily reset is needed
-    const user = await User.findOne({ telegramId }, 'credits');
-    if (user && isNewDay(user.credits.lastResetAt)) {
-      await User.findOneAndUpdate(
-        { telegramId },
-        { $set: { 'credits.remaining': config.credits.dailyFree, 'credits.lastResetAt': new Date() } }
-      );
-    }
+    const today = startOfTodayUTC();
 
-    // Atomic deduction — only succeeds if credits >= amount
+    // Pipeline update: reset if lastResetAt < today, then deduct if remaining >= amount
     const updated = await User.findOneAndUpdate(
-      { telegramId, 'credits.remaining': { $gte: amount } },
-      { $inc: { 'credits.remaining': -amount } },
-      { new: true }
+      { telegramId },
+      [
+        {
+          $set: {
+            'credits.remaining': {
+              $cond: {
+                if: { $lt: ['$credits.lastResetAt', today] },
+                then: config.credits.dailyFree,
+                else: '$credits.remaining',
+              },
+            },
+            'credits.lastResetAt': {
+              $cond: {
+                if: { $lt: ['$credits.lastResetAt', today] },
+                then: new Date(),
+                else: '$credits.lastResetAt',
+              },
+            },
+          },
+        },
+        {
+          $set: {
+            'credits.remaining': {
+              $cond: {
+                if: { $gte: ['$credits.remaining', amount] },
+                then: { $subtract: ['$credits.remaining', amount] },
+                else: '$credits.remaining',
+              },
+            },
+          },
+        },
+      ],
+      { new: false } // return doc BEFORE update so we can check if deduction was possible
     );
-    return updated !== null;
+
+    if (!updated) return false;
+
+    // Deduction succeeded if the pre-update remaining was >= amount
+    // (after potential reset, which we can infer from lastResetAt)
+    const wasReset = updated.credits.lastResetAt < today;
+    const effectiveBalance = wasReset ? config.credits.dailyFree : updated.credits.remaining;
+    return effectiveBalance >= amount;
   }
 }
 

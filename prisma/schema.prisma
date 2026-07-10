@@ -1,0 +1,198 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// User
+// ---------------------------------------------------------------------------
+model User {
+  id         Int      @id @default(autoincrement())
+  telegramId BigInt   @unique
+  username   String?
+  firstName  String?
+  lastName   String?
+
+  // AI settings
+  aiModel      String  @default("llama-3.3-70b-versatile")
+  temperature  Float   @default(0.7)
+  maxTokens    Int     @default(1024)
+
+  // Usage stats
+  totalMessages Int      @default(0)
+  totalTokens   Int      @default(0)
+  lastActiveAt  DateTime @default(now())
+
+  // Daily free credits (legacy — kept for Mongo parity during migration)
+  dailyCredits       Int      @default(20)
+  dailyCreditsReset  DateTime @default(now())
+
+  // Daily free image generation
+  lastFreeGenerationAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  wallet              Wallet?
+  coinTransactions    CoinTransaction[]
+  generationHistory   GenerationHistory[]
+  payments            Payment[]
+
+  @@index([telegramId])
+}
+
+// ---------------------------------------------------------------------------
+// Wallet  (one-to-one with User)
+// ---------------------------------------------------------------------------
+model Wallet {
+  id      Int  @id @default(autoincrement())
+  userId  Int  @unique
+  balance Int  @default(0)   // stored in coins (integer — no float precision issues)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  coinTransactions CoinTransaction[]
+}
+
+// ---------------------------------------------------------------------------
+// CoinPlan  (admin-defined purchasable plans)
+// ---------------------------------------------------------------------------
+model CoinPlan {
+  id          Int     @id @default(autoincrement())
+  name        String                          // e.g. "Starter Pack"
+  coins       Int                             // coins granted on purchase
+  priceUsd    Float                           // display price in USD
+  stripePriceId String?                       // Stripe Price ID for checkout
+  isActive    Boolean @default(true)
+  sortOrder   Int     @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  payments Payment[]
+}
+
+// ---------------------------------------------------------------------------
+// CoinTransaction  (every coin movement — immutable ledger)
+// ---------------------------------------------------------------------------
+enum CoinTxType {
+  TOPUP          // purchased via payment
+  SPEND          // used for generation
+  REFUND         // reversed spend
+  DAILY_RESET    // daily free credit grant
+  ADMIN_GRANT    // manually granted by admin
+  ADMIN_DEDUCT   // manually deducted by admin
+}
+
+model CoinTransaction {
+  id        Int        @id @default(autoincrement())
+  userId    Int
+  walletId  Int
+  type      CoinTxType
+  amount    Int                    // positive = credit, negative = debit
+  balanceAfter Int                 // snapshot of wallet balance after this tx
+  note      String?                // human-readable reason
+  refId     String?                // external reference (paymentId, generationId, etc.)
+
+  createdAt DateTime @default(now())
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  wallet Wallet @relation(fields: [walletId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([walletId])
+  @@index([type])
+}
+
+// ---------------------------------------------------------------------------
+// GenerationHistory  (unified: chat / image / video)
+// ---------------------------------------------------------------------------
+enum GenerationType {
+  CHAT
+  IMAGE
+  VIDEO
+}
+
+enum GenerationStatus {
+  SUCCESS
+  FAILED
+  PENDING
+}
+
+model GenerationHistory {
+  id       Int              @id @default(autoincrement())
+  userId   Int
+  type     GenerationType
+  status   GenerationStatus @default(PENDING)
+
+  // Chat-specific
+  prompt      String?
+  response    String?
+  model       String?
+  tokensUsed  Int?
+
+  // Image / Video-specific
+  provider    String?
+  mediaUrl    String?
+
+  // Cost
+  coinsSpent  Int @default(0)
+
+  error     String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([type])
+  @@index([userId, type])
+}
+
+// ---------------------------------------------------------------------------
+// Payment  (gateway transaction record)
+// ---------------------------------------------------------------------------
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
+}
+
+enum PaymentProvider {
+  STRIPE
+  TON
+  MANUAL
+}
+
+model Payment {
+  id         Int             @id @default(autoincrement())
+  userId     Int
+  planId     Int
+  provider   PaymentProvider
+  status     PaymentStatus   @default(PENDING)
+
+  amountUsd  Float
+  coins      Int             // coins to be credited on completion
+
+  // Gateway-specific fields
+  externalId    String?      // Stripe PaymentIntent ID, TON tx hash, etc.
+  checkoutUrl   String?
+  webhookPayload Json?       // raw gateway webhook body for audit
+
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  user User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan CoinPlan @relation(fields: [planId], references: [id])
+
+  @@index([userId])
+  @@index([externalId])
+  @@index([status])
+}

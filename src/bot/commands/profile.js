@@ -1,28 +1,24 @@
-import userRepository from '../../repositories/userRepository.js';
-import creditsRepository from '../../repositories/creditsRepository.js';
 import { safeMarkdownReply } from '../../helpers/formatMessage.js';
 
 const profileCommand = async (ctx) => {
-  const telegramId = ctx.from?.id;
+  const user = ctx.pgUser;
   const name = ctx.from?.first_name ?? 'Unknown';
 
-  const [user, credits] = await Promise.all([
-    userRepository.findByTelegramId(telegramId),
-    creditsRepository.getCredits(telegramId),
-  ]);
+  if (!user) {
+    return ctx.reply('⚠️ Profile not found. Please send /start first.');
+  }
 
-  const joined = user ? new Date(user.createdAt).toLocaleDateString() : 'N/A';
-  const messages = user?.stats?.totalMessages ?? 0;
-  const tokens = user?.stats?.totalTokens ?? 0;
+  const joined = new Date(user.createdAt).toLocaleDateString();
+  const balance = user.wallet?.balance ?? 0;
 
   const text =
     `👤 *Profile*\n\n` +
     `• Name: *${name}*\n` +
-    `• ID: \`${telegramId}\`\n` +
+    `• ID: \`${user.telegramId.toString()}\`\n` +
     `• Joined: *${joined}*\n` +
-    `• Messages sent: *${messages}*\n` +
-    `• Tokens used: *${tokens}*\n` +
-    `• Credits remaining: *${credits}*`;
+    `• Messages sent: *${user.totalMessages}*\n` +
+    `• Tokens used: *${user.totalTokens}*\n` +
+    `• Coin balance: *${balance}* 🪙`;
 
   await safeMarkdownReply(ctx, text);
 };

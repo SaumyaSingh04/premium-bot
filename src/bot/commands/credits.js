@@ -1,5 +1,5 @@
-import creditsRepository from '../../repositories/creditsRepository.js';
-import userRepository from '../../repositories/userRepository.js';
+import creditsService from '../../modules/credits/creditsService.js';
+import userService from '../../modules/user/userService.js';
 import config from '../../config/index.js';
 import { safeMarkdownReply } from '../../helpers/formatMessage.js';
 
@@ -7,8 +7,8 @@ const creditsCommand = async (ctx) => {
   const telegramId = ctx.from?.id;
 
   const [remaining, user] = await Promise.all([
-    creditsRepository.getCredits(telegramId),
-    userRepository.findByTelegramId(telegramId),
+    creditsService.getCredits(telegramId),
+    userService.findByTelegramId(telegramId),
   ]);
 
   const resetAt = user?.credits?.lastResetAt

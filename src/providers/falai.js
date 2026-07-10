@@ -1,35 +1,36 @@
 import axios from 'axios';
-import { VideoProvider } from './VideoProvider.js';
-import config from '../../config/index.js';
+import config from '../config/index.js';
 
 const BASE = 'https://queue.fal.run';
 const POLL_INTERVAL_MS = 5000;
-const MAX_POLL_MS = 300_000; // 5 minutes max
+const MAX_POLL_MS = 300_000;
 
-export class FalAiProvider extends VideoProvider {
+class FalAiProvider {
   constructor() {
-    super();
     this.headers = {
       Authorization: `Key ${config.video.falAi.apiKey}`,
       'Content-Type': 'application/json',
     };
-    this.model = config.video.falAi.model;
+  }
+
+  get model() {
+    return config.video.falAi.model;
+  }
+
+  get name() {
+    return 'falai';
   }
 
   async generate(prompt, onProgress) {
-    // Submit job
     const { data: submitted } = await axios.post(
       `${BASE}/${this.model}`,
       { prompt },
-      { headers: this.headers },
+      { headers: this.headers }
     );
 
-    const statusUrl = submitted.status_url;
-    const responseUrl = submitted.response_url;
-
+    const { status_url: statusUrl, response_url: responseUrl } = submitted;
     const deadline = Date.now() + MAX_POLL_MS;
 
-    // Poll until complete or timeout
     while (Date.now() < deadline) {
       await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
 
@@ -46,12 +47,15 @@ export class FalAiProvider extends VideoProvider {
         throw new Error(status.error ?? 'Fal.ai video generation failed');
       }
 
-      const elapsed = status.queue_position != null
-        ? `Queue position: ${status.queue_position}`
-        : 'Processing…';
+      const elapsed =
+        status.queue_position != null
+          ? `Queue position: ${status.queue_position}`
+          : 'Processing…';
       await onProgress(elapsed);
     }
 
     throw new Error('Video generation timed out after 5 minutes');
   }
 }
+
+export default new FalAiProvider();

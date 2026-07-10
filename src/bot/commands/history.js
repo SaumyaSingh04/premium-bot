@@ -1,45 +1,21 @@
-import chatHistoryRepository from '../../repositories/chatHistoryRepository.js';
-import imageHistoryRepository from '../../repositories/imageHistoryRepository.js';
-import videoHistoryRepository from '../../repositories/videoHistoryRepository.js';
+import generationService from '../../modules/generation/generationService.js';
 import { safeMarkdownReply } from '../../helpers/formatMessage.js';
 
+const TYPE_EMOJI = { IMAGE: '🎨', VIDEO: '🎬', CHAT: '💬' };
+
 const historyCommand = async (ctx) => {
-  const userId = ctx.from?.id;
+  const records = await generationService.getHistory(ctx.from.id, undefined, 10);
 
-  const [chats, images, videos] = await Promise.all([
-    chatHistoryRepository.findByTelegramId(userId, 5),
-    imageHistoryRepository.findByTelegramId(userId, 5),
-    videoHistoryRepository.findByTelegramId(userId, 5),
-  ]);
+  if (!records.length) return ctx.reply('📜 No generation history yet.');
 
-  const lines = ['📜 *Recent History*\n'];
-
-  if (chats.length) {
-    lines.push('💬 *Chat Sessions*');
-    for (const c of chats) {
-      const date = new Date(c.createdAt).toLocaleDateString();
-      lines.push(`• ${date} — ${c.messages.length} messages`);
-    }
-  }
-
-  if (images.length) {
-    lines.push('\n🎨 *Image Generations*');
-    for (const img of images) {
-      const date = new Date(img.createdAt).toLocaleDateString();
-      lines.push(`• ${date} — ${img.prompt.slice(0, 40)}…`);
-    }
-  }
-
-  if (videos.length) {
-    lines.push('\n🎬 *Video Generations*');
-    for (const vid of videos) {
-      const date = new Date(vid.createdAt).toLocaleDateString();
-      lines.push(`• ${date} — ${vid.prompt.slice(0, 40)}…`);
-    }
-  }
-
-  if (!chats.length && !images.length && !videos.length) {
-    lines.push('No history found yet. Start chatting!');
+  const lines = ['📜 *Recent Generations*\n'];
+  for (const r of records) {
+    const emoji = TYPE_EMOJI[r.type] ?? '•';
+    const date = new Date(r.createdAt).toLocaleDateString();
+    const prompt = r.prompt ? r.prompt.slice(0, 40) + (r.prompt.length > 40 ? '…' : '') : '—';
+    const status = r.status === 'SUCCESS' ? '✅' : r.status === 'FAILED' ? '❌' : '⏳';
+    lines.push(`${emoji} ${status} *${r.type}* — ${date}`);
+    lines.push(`  └ ${prompt} _(${r.coinsSpent} coins)_`);
   }
 
   await safeMarkdownReply(ctx, lines.join('\n'));

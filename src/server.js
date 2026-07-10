@@ -3,6 +3,7 @@ import app from './app.js';
 import bot from './bot/bot.js';
 import config from './config/index.js';
 import { connectDB, disconnectDB } from './config/database.js';
+import { connectPrisma, disconnectPrisma } from './config/prisma.js';
 import logger from './logger/index.js';
 
 const { port, isProduction, telegram } = config;
@@ -10,6 +11,7 @@ const { port, isProduction, telegram } = config;
 async function start() {
   try {
     await connectDB();
+    await connectPrisma();
 
     try {
       await bot.telegram.setMyCommands([
@@ -62,6 +64,7 @@ async function start() {
       server.close(async () => {
         logger.info('HTTP server closed');
         await disconnectDB();
+        await disconnectPrisma();
         process.exit(0);
       });
     };

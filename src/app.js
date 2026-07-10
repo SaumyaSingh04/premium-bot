@@ -6,17 +6,25 @@ import { globalRateLimiter } from './middleware/rateLimiter.js';
 import errorHandler from './middleware/errorHandler.js';
 import { sendSuccess } from './utils/response.js';
 import { HTTP_STATUS } from './constants/index.js';
-import { chat, clearHistory } from './controllers/chatController.js';
-import { validate, chatSchema } from './validators/chat.js';
 import logger from './logger/index.js';
 import config from './config/index.js';
 import sessionRepository from './repositories/sessionRepository.js';
 import bot from './bot/bot.js';
+import apiRoutes from './routes/index.js';
+import paymentService from './modules/payment/paymentService.js';
+import razorpayProvider from './modules/payment/RazorpayProvider.js';
 
 const app = express();
 
+// Register payment providers
+paymentService.registerProvider(razorpayProvider);
+
 // Security & parsing
 applySecurityMiddleware(app);
+
+// Raw body capture for Razorpay webhook signature verification
+app.use('/api/v1/payments/webhook/razorpay', express.raw({ type: 'application/json' }));
+
 app.use(express.json({ limit: '10kb' }));
 app.use(express.urlencoded({ extended: false }));
 
@@ -53,20 +61,8 @@ app.get('/health', (req, res) => {
   }, 'Healthy');
 });
 
-// API routes
-const router = express.Router();
-
-router.get('/status', (req, res) => {
-  sendSuccess(res, { status: 'running', timestamp: new Date().toISOString() }, 'Bot is running');
-});
-
-router.post('/chat', validate(chatSchema), chat);
-router.post('/chat/clear', clearHistory);
-
-app.use('/api/v1', router);
-
-// Telegram webhook
-app.post(config.telegram.webhookPath, bot.webhookCallback(config.telegram.webhookPath));
+// API routes (all modules)
+app.use('/api/v1', apiRoutes);
 
 // Root route
 app.get('/', (req, res) => {

@@ -5,6 +5,7 @@ const schema = Joi.object({
   NODE_ENV: Joi.string().valid('development', 'production', 'test').default('development'),
 
   MONGODB_URI: Joi.string().required(),
+  DATABASE_URL: Joi.string().required(),
 
   IMAGE_PROVIDER: Joi.string().default('huggingface'),
   HUGGINGFACE_TOKEN: Joi.string().optional().default(''),
@@ -15,6 +16,10 @@ const schema = Joi.object({
   FAL_AI_VIDEO_MODEL: Joi.string().default('fal-ai/kling-video/v1.6/standard/text-to-video'),
 
   DAILY_FREE_CREDITS: Joi.number().default(20),
+
+  RAZORPAY_KEY_ID: Joi.string().optional().default(''),
+  RAZORPAY_KEY_SECRET: Joi.string().optional().default(''),
+  RAZORPAY_WEBHOOK_SECRET: Joi.string().optional().default(''),
 
   ADMIN_IDS: Joi.string().allow('').optional().default(''),
   HEALTH_SECRET: Joi.string().allow('').optional().default(''),
@@ -92,6 +97,10 @@ export default {
     uri: env.MONGODB_URI,
   },
 
+  pg: {
+    url: env.DATABASE_URL,
+  },
+
   image: {
     provider: env.IMAGE_PROVIDER,
     huggingFace: {
@@ -115,5 +124,11 @@ export default {
   admin: {
     ids: env.ADMIN_IDS ? env.ADMIN_IDS.split(',').map((id) => parseInt(id.trim(), 10)).filter(Boolean) : [],
     healthSecret: env.HEALTH_SECRET,
+  },
+
+  razorpay: {
+    keyId: env.RAZORPAY_KEY_ID,
+    keySecret: env.RAZORPAY_KEY_SECRET,
+    webhookSecret: env.RAZORPAY_WEBHOOK_SECRET,
   },
 };

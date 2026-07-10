@@ -26,7 +26,11 @@ export const BOT_MESSAGES = {
     `/about \\- About this bot\n` +
     `/stats \\- Your usage statistics\n` +
     `/settings \\- View your current settings\n` +
-    `/image <prompt> \\- Generate an AI image\n` +
+    `/balance \\- Check your coin balance\n` +
+    `/plans \\- View available coin plans\n` +
+    `/history \\- Your generation history\n` +
+    `/generate <prompt> \\- Generate an AI image\n` +
+    `/edit <prompt> \\- Edit an image \\(reply to a photo\\)\n` +
     `/video <prompt> \\- Generate an AI video\n\n` +
     `💬 *Just type any message to chat with the AI\\.*`,
 

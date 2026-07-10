@@ -1,16 +1,14 @@
-import { generateVideo } from '../../services/video/videoService.js';
-import videoHistoryRepository from '../../repositories/videoHistoryRepository.js';
-import config from '../../config/index.js';
-import logger from '../../logger/index.js';
+import generationService from '../../modules/generation/generationService.js';
+import { GENERATION_COSTS } from '../../modules/generation/generationCosts.js';
+import { GENERATION_ERRORS } from '../../modules/generation/generationError.js';
 
 const PROGRESS_MESSAGES = ['⏳ In queue…', '🎬 Generating…', '🔄 Still working…', '🎞️ Almost there…'];
 
 const videoCommand = async (ctx) => {
-  const userId = ctx.from?.id;
   const prompt = ctx.message?.text?.replace(/^\/video\s*/i, '').trim();
 
   if (!prompt) {
-    return ctx.reply('🎬 Please provide a prompt. Usage: /video <description>');
+    return ctx.reply(`🎬 Usage: /video <prompt>\n💰 Cost: ${GENERATION_COSTS.VIDEO} coins`);
   }
 
   const statusMsg = await ctx.reply('🎬 Starting video generation…');
@@ -26,42 +24,22 @@ const videoCommand = async (ctx) => {
 
   try {
     await ctx.sendChatAction('upload_video');
-    const { url } = await generateVideo(prompt, onProgress);
+    const { url, coinsSpent } = await generationService.generateVideo(ctx.from.id, prompt, onProgress);
 
     await ctx.telegram
       .editMessageText(ctx.chat.id, statusMsg.message_id, undefined, '✅ Done! Sending video…')
       .catch(() => {});
 
-    await ctx.replyWithVideo({ url }, { caption: `🎬 ${prompt}` });
+    await ctx.replyWithVideo({ url }, { caption: `🎬 ${prompt}\n💰 ${coinsSpent} coins spent` });
     await ctx.deleteMessage(statusMsg.message_id).catch(() => {});
-
-    await videoHistoryRepository.create({
-      telegramId: userId,
-      prompt,
-      provider: config.video.provider,
-      model: config.video.falAi.model,
-      videoUrl: url,
-      status: 'success',
-    });
   } catch (err) {
-    logger.error('Video generation failed', { userId, prompt, error: err.message });
-
-    await videoHistoryRepository.create({
-      telegramId: userId,
-      prompt,
-      provider: config.video.provider,
-      status: 'failed',
-      error: err.message,
-    }).catch(() => {});
-
+    const msg =
+      err.code === GENERATION_ERRORS.INSUFFICIENT_COINS
+        ? `❌ Not enough coins. Need ${GENERATION_COSTS.VIDEO} coins.`
+        : '❌ Video generation failed. Please try again.';
     await ctx.telegram
-      .editMessageText(
-        ctx.chat.id,
-        statusMsg.message_id,
-        undefined,
-        '❌ Failed to generate video. Please try again or refine your prompt.'
-      )
-      .catch(() => ctx.reply('❌ Failed to generate video. Please try again or refine your prompt.'));
+      .editMessageText(ctx.chat.id, statusMsg.message_id, undefined, msg)
+      .catch(() => ctx.reply(msg));
   }
 };
 

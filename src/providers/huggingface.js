@@ -1,8 +1,11 @@
 import axios from 'axios';
-import { ImageProvider } from './ImageProvider.js';
-import logger from '../../logger/index.js';
+import logger from '../logger/index.js';
+import config from '../config/index.js';
 
-export class HuggingFaceProvider extends ImageProvider {
+/**
+ * Pollinations.ai image generation (configured under huggingface provider key).
+ */
+class HuggingFaceProvider {
   async generate(prompt) {
     logger.info('Pollinations image request', { prompt });
 
@@ -17,4 +20,14 @@ export class HuggingFaceProvider extends ImageProvider {
     logger.info('Pollinations image generated', { bytes: buffer.length });
     return buffer;
   }
+
+  get model() {
+    return config.image.huggingFace.model;
+  }
+
+  get name() {
+    return 'huggingface';
+  }
 }
+
+export default new HuggingFaceProvider();
