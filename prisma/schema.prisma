@@ -68,6 +68,7 @@ model CoinPlan {
   name        String                          // e.g. "Starter Pack"
   coins       Int                             // coins granted on purchase
   priceUsd    Float                           // display price in USD
+  starsAmount Int     @default(0)             // Telegram Stars price (0 = not available via Stars)
   stripePriceId String?                       // Stripe Price ID for checkout
   isActive    Boolean @default(true)
   sortOrder   Int     @default(0)
@@ -168,6 +169,7 @@ enum PaymentProvider {
   STRIPE
   TON
   MANUAL
+  TELEGRAM_STARS
 }
 
 model Payment {
@@ -179,6 +181,8 @@ model Payment {
 
   amountUsd  Float
   coins      Int             // coins to be credited on completion
+  starsAmount    Int?        // Telegram Stars amount (XTR)
+  telegramChargeId String?   // Telegram payment_charge_id — idempotency key
 
   // Gateway-specific fields
   externalId    String?      // Stripe PaymentIntent ID, TON tx hash, etc.
@@ -194,5 +198,6 @@ model Payment {
 
   @@index([userId])
   @@index([externalId])
+  @@index([telegramChargeId])
   @@index([status])
 }

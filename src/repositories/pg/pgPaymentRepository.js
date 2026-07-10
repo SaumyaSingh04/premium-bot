@@ -12,6 +12,10 @@ class PgPaymentRepository {
     return prisma.payment.findFirst({ where: { externalId } });
   }
 
+  findByTelegramChargeId(telegramChargeId) {
+    return prisma.payment.findFirst({ where: { telegramChargeId } });
+  }
+
   findByUserId(userId, limit = 20, offset = 0) {
     return prisma.payment.findMany({
       where: { userId },

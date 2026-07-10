@@ -19,8 +19,8 @@ export const getPlanById = asyncHandler(async (req, res) => {
 
 // POST /api/v1/plans
 export const createPlan = asyncHandler(async (req, res) => {
-  const { name, coins, priceUsd, stripePriceId, isActive, sortOrder } = req.body;
-  const plan = await coinPlanService.createPlan({ name, coins, priceUsd, stripePriceId, isActive, sortOrder });
+  const { name, coins, priceUsd, starsAmount, stripePriceId, isActive, sortOrder } = req.body;
+  const plan = await coinPlanService.createPlan({ name, coins, priceUsd, starsAmount, stripePriceId, isActive, sortOrder });
   sendSuccess(res, { plan }, 'Plan created', HTTP_STATUS.CREATED);
 });
 

@@ -28,6 +28,7 @@ export const BOT_MESSAGES = {
     `/settings \\- View your current settings\n` +
     `/balance \\- Check your coin balance\n` +
     `/plans \\- View available coin plans\n` +
+    `/buy \\- Buy coins with Telegram Stars\n` +
     `/history \\- Your generation history\n` +
     `/generate <prompt> \\- Generate an AI image\n` +
     `/edit <prompt> \\- Edit an image \\(reply to a photo\\)\n` +

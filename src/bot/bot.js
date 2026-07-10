@@ -29,7 +29,9 @@ import editCommand from './commands/edit.js';
 import profileCommand from './commands/profile.js';
 import creditsCommand from './commands/credits.js';
 import adminCommand from './commands/admin.js';
+import buyCommand, { buyCallbackHandler } from './commands/buy.js';
 import messageHandler from './handlers/messageHandler.js';
+import { preCheckoutHandler, successfulPaymentHandler } from './handlers/starsPaymentHandler.js';
 
 const bot = new Telegraf(config.telegram.token);
 
@@ -96,6 +98,17 @@ bot.command('imageedit', creditsMiddleware, imageEditCommand);
 bot.command('profile', profileCommand);
 bot.command('credits', creditsCommand);
 bot.command('admin', adminMiddleware, adminCommand);
+bot.command('buy', buyCommand);
+
+// Telegram Stars — must be registered before the generic message handler
+bot.on('pre_checkout_query', preCheckoutHandler);
+bot.on('message', (ctx, next) => {
+  if (ctx.message?.successful_payment) return successfulPaymentHandler(ctx);
+  return next();
+});
+
+// Inline button handler for buy:<planId>
+bot.action(/^buy:\d+$/, buyCallbackHandler);
 
 // Text messages (free-form chat)
 bot.on('text', creditsMiddleware, messageHandler);
